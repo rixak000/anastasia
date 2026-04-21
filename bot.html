@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+	<title>Telegram Mini App</title>
+	<script src="https://telegram.org/js/telegram-web-app.js"></script>
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+			padding: 20px;
+			min-height: 100vh;
+			transition: all 0.3s ease;
+		}
+
+		.container {
+			max-width: 600px;
+			margin: 0 auto;
+		}
+
+		.card {
+			border-radius: 16px;
+			padding: 24px;
+			margin-bottom: 20px;
+			box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+		}
+
+		.status-telegram {
+			background: #d4edda;
+			border-left: 4px solid #28a745;
+			color: #155724;
+		}
+
+		.status-browser {
+			background: #f8d7da;
+			border-left: 4px solid #dc3545;
+			color: #721c24;
+		}
+
+		.user-info {
+			background: #d1ecf1;
+			border-left: 4px solid #17a2b8;
+			color: #0c5460;
+			margin-top: 20px;
+		}
+
+		.debug {
+			background: #f5f5f5;
+			padding: 15px;
+			border-radius: 8px;
+			font-family: monospace;
+			font-size: 12px;
+			margin-top: 20px;
+			word-break: break-all;
+		}
+
+		button {
+			background: #007bff;
+			color: white;
+			border: none;
+			padding: 12px 24px;
+			border-radius: 8px;
+			font-size: 16px;
+			cursor: pointer;
+			margin-top: 15px;
+			margin-right: 10px;
+		}
+
+		button:hover {
+			background: #0056b3;
+		}
+
+		button:disabled {
+			background: #ccc;
+			cursor: not-allowed;
+		}
+
+		h2 {
+			margin-bottom: 15px;
+		}
+
+		p {
+			margin: 10px 0;
+		}
+
+		img {
+			border-radius: 50%;
+			width: 80px;
+			height: 80px;
+			margin-top: 10px;
+		}
+	</style>
+</head>
+<body id="body">
+<div class="container">
+	<div class="card" id="statusCard">
+		<h2 id="statusTitle">🔄 Проверка...</h2>
+		<p id="statusMessage">Инициализация...</p>
+		<p><strong>📱 User Agent:</strong> <span id="userAgent"></span></p>
+	</div>
+
+	<div id="userInfo" style="display: none;" class="card user-info">
+		<h2>👤 Данные пользователя Telegram:</h2>
+		<div id="userData"></div>
+	</div>
+
+	<div class="actions">
+		<button id="sendBtn" disabled>📤 Отправить данные боту</button>
+		<button id="closeBtn">❌ Закрыть приложение</button>
+	</div>
+
+	<div class="debug" id="debugInfo">
+		<strong>🔍 Отладочная информация:</strong><br>
+		<span id="debugText">Ожидание...</span>
+	</div>
+</div>
+
+<script>
+	// Показываем User Agent
+	document.getElementById('userAgent').textContent = navigator.userAgent;
+
+	// Переменные
+	let tg = null;
+	let isTelegram = false;
+	let userData = null;
+
+	// Функция обновления UI
+	function updateUI() {
+		const statusCard = document.getElementById('statusCard');
+		const statusTitle = document.getElementById('statusTitle');
+		const statusMessage = document.getElementById('statusMessage');
+		const sendBtn = document.getElementById('sendBtn');
+		const userInfoDiv = document.getElementById('userInfo');
+		const userDataDiv = document.getElementById('userData');
+		const body = document.getElementById('body');
+
+		if (isTelegram && userData) {
+			// Режим Telegram с данными
+			statusCard.className = 'card status-telegram';
+			statusTitle.innerHTML = '✅ Запущен из Telegram Mini App';
+			statusMessage.innerHTML = 'Приложение успешно запущено в Telegram!';
+			sendBtn.disabled = false;
+
+			// Показываем данные пользователя
+			userInfoDiv.style.display = 'block';
+			userDataDiv.innerHTML = `
+                    <p><strong>🆔 ID:</strong> ${userData.id || 'Неизвестно'}</p>
+                    <p><strong>👤 Имя:</strong> ${userData.first_name || ''} ${userData.last_name || ''}</p>
+                    <p><strong>🔗 Username:</strong> ${userData.username ? '@' + userData.username : 'Не указан'}</p>
+                    <p><strong>🗣️ Язык:</strong> ${userData.language_code || 'Не указан'}</p>
+                    ${userData.photo_url ? `<img src="${userData.photo_url}" alt="Avatar">` : ''}
+                `;
+
+			// Меняем тему под Telegram
+			if (tg && tg.themeParams) {
+				body.style.backgroundColor = tg.themeParams.bg_color || '#ffffff';
+				body.style.color = tg.themeParams.text_color || '#000000';
+			}
+
+		} else if (isTelegram && !userData) {
+			// Режим Telegram без данных
+			statusCard.className = 'card status-telegram';
+			statusTitle.innerHTML = '⚠️ Запущен из Telegram, но данные не получены';
+			statusMessage.innerHTML = 'Попробуйте перезапустить приложение или проверьте настройки бота.';
+			sendBtn.disabled = true;
+			userInfoDiv.style.display = 'none';
+
+		} else {
+			// Режим браузера
+			statusCard.className = 'card status-browser';
+			statusTitle.innerHTML = '❌ Запущен из браузера';
+			statusMessage.innerHTML = '⚠️ Это приложение работает только внутри Telegram Mini App!<br>Пожалуйста, откройте его через бота в Telegram.';
+			sendBtn.disabled = true;
+			userInfoDiv.style.display = 'none';
+		}
+	}
+
+	// Функция инициализации Telegram
+	function initTelegram() {
+		try {
+			if (window.Telegram && window.Telegram.WebApp) {
+				tg = window.Telegram.WebApp;
+				tg.ready();
+				tg.expand(); // На весь экран
+
+				isTelegram = true;
+
+				// Получаем данные пользователя
+				if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+					userData = tg.initDataUnsafe.user;
+					document.getElementById('debugText').innerHTML = `
+                            ✅ Telegram WebApp инициализирован<br>
+                            📦 initData получено: ДА<br>
+                            👤 Пользователь: ${userData.first_name || 'Неизвестно'}<br>
+                            🆔 ID: ${userData.id || 'Нет'}<br>
+                            🔗 initDataUnsafe доступен: ДА
+                        `;
+				} else {
+					document.getElementById('debugText').innerHTML = `
+                            ⚠️ Telegram WebApp инициализирован<br>
+                            📦 initData получено: НЕТ<br>
+                            👤 Пользователь: Не получен<br>
+                            🔍 Проверьте настройки бота в BotFather
+                        `;
+				}
+
+				updateUI();
+
+			} else {
+				// Не в Telegram
+				isTelegram = false;
+				document.getElementById('debugText').innerHTML = `
+                        ❌ Telegram WebApp не обнаружен<br>
+                        🌐 Запущено в обычном браузере<br>
+                        💡 Для работы откройте через Telegram бота
+                    `;
+				updateUI();
+			}
+		} catch(e) {
+			console.error('Ошибка:', e);
+			isTelegram = false;
+			document.getElementById('debugText').innerHTML = `❌ Ошибка: ${e.message}`;
+			updateUI();
+		}
+	}
+
+	// Отправка данных боту
+	function sendToBot() {
+		if (tg && userData) {
+			const data = {
+				action: 'user_data',
+				user_id: userData.id,
+				username: userData.username,
+				first_name: userData.first_name,
+				last_name: userData.last_name,
+				timestamp: new Date().toISOString()
+			};
+
+			try {
+				tg.sendData(JSON.stringify(data));
+				tg.showAlert('✅ Данные успешно отправлены боту!');
+				document.getElementById('debugText').innerHTML += '<br>📤 Данные отправлены боту';
+			} catch(e) {
+				tg.showAlert('❌ Ошибка при отправке');
+				console.error(e);
+			}
+		} else {
+			alert('❌ Не в Telegram Mini App');
+		}
+	}
+
+	// Закрытие приложения
+	function closeApp() {
+		if (tg) {
+			tg.close();
+		} else {
+			window.close();
+		}
+	}
+
+	// Назначаем обработчики после загрузки страницы
+	document.addEventListener('DOMContentLoaded', function() {
+		initTelegram();
+
+		document.getElementById('sendBtn').addEventListener('click', sendToBot);
+		document.getElementById('closeBtn').addEventListener('click', closeApp);
+	});
+</script>
+</body>
+</html>
